@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Investigalo CRM</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .chat-bg { background-color: #efeae2; background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-gray-100 h-screen flex flex-col overflow-hidden font-sans relative">
+
+    <div id="login" class="fixed inset-0 bg-[#111b21] flex items-center justify-center z-[60]">
+        <div class="bg-gray-800 p-8 rounded-xl shadow-2xl w-full max-w-sm mx-4 text-white text-center">
+            <i class="fa-solid fa-user-secret text-5xl text-green-500 mb-4"></i>
+            <h2 class="text-2xl font-bold mb-6">Investigalo Detectives</h2>
+            <input id="bot-id" type="text" placeholder="ID de Meta del Bot" class="w-full bg-gray-700 p-3 rounded mb-4 text-white outline-none">
+            <button onclick="login()" class="w-full bg-green-600 hover:bg-green-700 p-3 rounded font-bold transition">Conectar Sistema</button>
+        </div>
+    </div>
+
+    <div id="case-modal" class="hidden fixed inset-0 bg-black bg-opacity-80 z-[70] flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl w-full max-w-2xl flex flex-col max-h-[90vh] shadow-2xl">
+            <header class="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-xl">
+                <div>
+                    <h3 class="font-bold text-xl text-gray-800" id="modal-title">Detalles del Caso</h3>
+                    <p class="text-sm text-gray-500" id="modal-phone">Número de cliente</p>
+                </div>
+                <button onclick="closeCaseModal()" class="text-gray-400 hover:text-red-500 transition"><i class="fa-solid fa-xmark text-2xl"></i></button>
+            </header>
+            
+            <div class="p-6 flex-1 overflow-y-auto space-y-6">
+                <div>
+                    <label class="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2 mb-2"><i class="fa-solid fa-robot text-blue-500"></i> Resumen Automático (IA)</label>
+                    <p id="modal-summary" class="text-sm bg-blue-50 p-4 rounded-lg border border-blue-100 text-blue-900 leading-relaxed"></p>
+                </div>
+                <div class="flex-1 flex flex-col h-64">
+                    <label class="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2 mb-2"><i class="fa-solid fa-pen-to-square text-yellow-500"></i> Notas y Anotaciones del Detective</label>
+                    <textarea id="modal-notes" class="w-full flex-1 border border-gray-300 rounded-lg p-4 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none bg-yellow-50" placeholder="Escribe aquí evidencias, presupuestos, notas de seguimiento..."></textarea>
+                </div>
+            </div>
+            
+            <footer class="p-4 border-t bg-gray-50 rounded-b-xl flex justify-between items-center">
+                <button id="btn-modal-chat" class="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-bold text-sm transition flex gap-2 items-center"><i class="fa-solid fa-comment"></i> Ir al Chat</button>
+                <div class="flex gap-2 items-center">
+                    <span id="save-status" class="hidden text-green-600 font-bold text-sm items-center mr-4"><i class="fa-solid fa-check mr-1"></i> ¡Guardado!</span>
+                    <button onclick="saveCaseNotes()" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-sm transition shadow-md flex gap-2 items-center"><i class="fa-solid fa-floppy-disk"></i> Guardar Notas</button>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <header class="bg-[#00a884] text-white p-3 flex justify-between items-center shadow-md z-40">
+        <div class="flex items-center gap-3">
+            <h1 class="font-bold text-lg hidden sm:block">Panel de Control</h1>
+            <div class="flex items-center gap-2 bg-[#008f6f] px-3 py-1 rounded-full text-sm">
+                <span>IA Global:</span>
+                <button id="btn-global-ai" onclick="toggleGlobalAI()" class="font-bold text-white"><i class="fa-solid fa-toggle-on"></i> ON</button>
+            </div>
+        </div>
+
+        <div class="relative">
+            <button onclick="document.getElementById('menu-dropdown').classList.toggle('hidden')" class="text-2xl px-2">
+                <i class="fa-solid fa-ellipsis-vertical"></i>
+            </button>
+            <div id="menu-dropdown" class="hidden absolute right-0 mt-2 w-48 bg-white text-gray-800 rounded shadow-xl py-2 z-50">
+                <button onclick="switchView('whatsapp')" class="w-full text-left px-4 py-2 hover:bg-gray-100"><i class="fa-brands fa-whatsapp text-green-500 w-6"></i> WhatsApp</button>
+                <button onclick="switchView('casos')" class="w-full text-left px-4 py-2 hover:bg-gray-100"><i class="fa-solid fa-folder-open text-yellow-500 w-6"></i> Casos / Kanban</button>
+                <button onclick="switchView('crm')" class="w-full text-left px-4 py-2 hover:bg-gray-100"><i class="fa-solid fa-users text-blue-500 w-6"></i> CRM Clientes</button>
+            </div>
+        </div>
+    </header>
+
+    <div class="flex-1 relative">
+        
+        <div id="view-whatsapp" class="absolute inset-0 flex">
+            <aside class="w-full sm:w-1/3 md:w-80 bg-white border-r border-gray-200 flex flex-col">
+                <div class="bg-gray-50 p-3 border-b border-gray-200 flex justify-between items-center">
+                    <h2 class="font-bold text-gray-700">Chats</h2>
+                    <button onclick="startNewChat()" class="text-gray-500 hover:text-green-600"><i class="fa-solid fa-address-book text-xl"></i></button>
+                </div>
+                <div id="contact-list" class="flex-1 overflow-y-auto"></div>
+            </aside>
+
+            <main id="chat-area" class="hidden sm:flex flex-1 flex-col relative chat-bg border-l border-gray-200">
+                <div id="empty-chat" class="absolute inset-0 flex flex-col items-center justify-center bg-[#f0f2f5] z-10">
+                    <i class="fa-brands fa-whatsapp text-6xl text-gray-300 mb-4"></i>
+                    <h2 class="text-gray-500 text-xl">Selecciona un chat para iniciar</h2>
+                </div>
+
+                <header class="bg-[#f0f2f5] p-3 flex justify-between items-center border-b border-gray-200 shadow-sm z-20">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center text-white"><i class="fa-solid fa-user"></i></div>
+                        <h2 id="active-contact" class="font-bold text-gray-800">Número</h2>
+                    </div>
+                    <div class="flex flex-col items-end">
+                        <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Asistente IA</span>
+                        <button id="btn-local-ai" onclick="toggleLocalAI()" class="text-sm bg-green-100 text-green-700 px-3 py-1 rounded-full font-bold shadow-sm transition">
+                            <i class="fa-solid fa-robot"></i> ACTIVO
+                        </button>
+                    </div>
+                </header>
+
+                <div id="chat-box" class="flex-1 overflow-y-auto p-4 space-y-2 z-0"></div>
+
+                <footer class="bg-[#f0f2f5] p-3 flex gap-2 items-center z-20">
+                    <input id="msj-input" type="text" placeholder="Escribe un mensaje" class="flex-1 bg-white py-2 px-4 rounded-lg outline-none shadow-sm text-gray-700">
+                    <button onclick="enviar()" class="w-10 h-10 bg-[#00a884] text-white rounded-full flex items-center justify-center shadow hover:bg-[#008f6f]"><i class="fa-solid fa-paper-plane"></i></button>
+                </footer>
+            </main>
+        </div>
+
+        <div id="view-casos" class="absolute inset-0 bg-gray-100 hidden p-6 flex flex-col h-full overflow-hidden">
+            <header class="flex justify-between items-center mb-6 shrink-0">
+                <h2 class="text-2xl font-bold text-gray-800"><i class="fa-solid fa-folder-open text-yellow-500"></i> Gestión de Casos</h2>
+                <button onclick="loadCases()" class="bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded shadow-sm font-bold text-sm"><i class="fa-solid fa-rotate-right"></i> Actualizar</button>
+            </header>
+
+            <div class="flex-1 flex gap-6 overflow-x-auto pb-4">
+                <div class="flex-1 min-w-[300px] bg-gray-200 rounded-xl p-4 flex flex-col border-t-4 border-red-500">
+                    <h3 class="font-bold text-gray-700 mb-4 uppercase text-sm flex items-center gap-2"><i class="fa-solid fa-triangle-exclamation text-red-500"></i> Urgencias</h3>
+                    <div id="col-urgentes" class="space-y-4 overflow-y-auto flex-1"></div>
+                </div>
+
+                <div class="flex-1 min-w-[300px] bg-gray-200 rounded-xl p-4 flex flex-col border-t-4 border-yellow-500">
+                    <h3 class="font-bold text-gray-700 mb-4 uppercase text-sm flex items-center gap-2"><i class="fa-solid fa-clock text-yellow-500"></i> Por Revisar</h3>
+                    <div id="col-revisar" class="space-y-4 overflow-y-auto flex-1"></div>
+                </div>
+
+                <div class="flex-1 min-w-[300px] bg-gray-200 rounded-xl p-4 flex flex-col border-t-4 border-green-500">
+                    <h3 class="font-bold text-gray-700 mb-4 uppercase text-sm flex items-center gap-2"><i class="fa-solid fa-check-double text-green-500"></i> Casos Aceptados</h3>
+                    <div id="col-aceptados" class="space-y-4 overflow-y-auto flex-1"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-crm" class="absolute inset-0 bg-gray-100 hidden p-6 overflow-y-auto">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6"><i class="fa-solid fa-users text-blue-500"></i> Gestión de Clientes (CRM)</h2>
+            <div class="bg-white p-8 rounded-xl shadow-sm text-center text-gray-500 border border-dashed border-gray-300">
+                <i class="fa-solid fa-hammer text-4xl mb-4 text-gray-300"></i>
+                <p>La vista detallada del CRM se construirá aquí en la próxima fase.</p>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const socket = io();
+        let currentBot = '';
+        let currentClient = '';
+        let globalAi = true;
+        let localAi = true;
+        
+        let currentCasesList = []; 
+        let activeCaseId = null;
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.relative')) document.getElementById('menu-dropdown').classList.add('hidden');
+        });
+
+        function switchView(viewName) {
+            document.getElementById('view-whatsapp').classList.add('hidden');
+            document.getElementById('view-crm').classList.add('hidden');
+            document.getElementById('view-casos').classList.add('hidden');
+            document.getElementById(`view-${viewName}`).classList.remove('hidden');
+            document.getElementById('menu-dropdown').classList.add('hidden');
+            
+            if (viewName === 'casos') loadCases();
+        }
+
+        function login() {
+            currentBot = document.getElementById('bot-id').value;
+            if(!currentBot) return;
+            socket.emit('select_bot', currentBot);
+            document.getElementById('login').classList.add('hidden');
+        }
+
+        socket.on('bot_loaded', (data) => {
+            globalAi = data.globalAi;
+            updateGlobalAIBtn();
+            document.getElementById('contact-list').innerHTML = data.contacts.map(c => `
+                <div onclick="selectChat('${c.client_phone}')" class="p-3 border-b border-gray-100 hover:bg-gray-100 cursor-pointer flex gap-3 items-center">
+                    <div class="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center text-gray-500"><i class="fa-solid fa-user"></i></div>
+                    <div class="flex-1">
+                        <div class="font-bold text-gray-800">${c.client_phone}</div>
+                        <div class="text-xs text-gray-500">${new Date(c.last_time).toLocaleDateString()}</div>
+                    </div>
+                </div>
+            `).join('');
+        });
+
+        function selectChat(phone) {
+            currentClient = phone;
+            document.getElementById('empty-chat').classList.add('hidden');
+            document.getElementById('chat-area').classList.remove('hidden', 'sm:flex');
+            document.getElementById('chat-area').classList.add('flex'); 
+            document.getElementById('active-contact').innerText = phone;
+            socket.emit('get_chat', { botId: currentBot, phone: phone });
+        }
+
+        socket.on('chat_history', ({ messages, bot_active }) => {
+            localAi = bot_active;
+            updateLocalAIBtn();
+            const box = document.getElementById('chat-box');
+            box.innerHTML = messages.map(m => {
+                const isClient = m.sender === 'client';
+                return `
+                <div class="flex ${isClient ? 'justify-start' : 'justify-end'} mb-1">
+                    <div class="max-w-[85%] sm:max-w-[70%] px-3 py-2 rounded-lg relative shadow-sm text-sm ${isClient ? 'bg-white rounded-tl-none' : 'bg-[#d9fdd3] rounded-tr-none'}">
+                        ${m.text}
+                    </div>
+                </div>`;
+            }).join('');
+            box.scrollTop = box.scrollHeight;
+        });
+
+        function enviar() {
+            const text = document.getElementById('msj-input').value;
+            if(!text || !currentClient) return;
+            socket.emit('send_manual', { botId: currentBot, to: currentClient, text: text });
+            document.getElementById('msj-input').value = '';
+        }
+
+        function toggleGlobalAI() {
+            globalAi = !globalAi;
+            updateGlobalAIBtn();
+            socket.emit('toggle_global_ai', { botId: currentBot, active: globalAi });
+        }
+
+        function updateGlobalAIBtn() {
+            const btn = document.getElementById('btn-global-ai');
+            btn.innerHTML = globalAi ? '<i class="fa-solid fa-toggle-on"></i> ON' : '<i class="fa-solid fa-toggle-off"></i> OFF';
+            btn.className = globalAi ? 'font-bold text-white' : 'font-bold text-red-200';
+        }
+
+        function toggleLocalAI() {
+            localAi = !localAi;
+            updateLocalAIBtn();
+            socket.emit('toggle_local_ai', { botId: currentBot, phone: currentClient, active: localAi });
+        }
+
+        function updateLocalAIBtn() {
+            const btn = document.getElementById('btn-local-ai');
+            btn.innerHTML = localAi ? '<i class="fa-solid fa-robot"></i> ACTIVO' : '<i class="fa-solid fa-hand"></i> PAUSADO';
+            btn.className = localAi ? 'text-sm bg-green-100 text-green-700 px-3 py-1 rounded-full font-bold shadow-sm' : 'text-sm bg-red-100 text-red-700 px-3 py-1 rounded-full font-bold shadow-sm';
+        }
+
+        function startNewChat() {
+            const num = prompt("Aún no tienes la versión APK instalada para leer contactos del teléfono.\n\nIntroduce manualmente el número (ej: +34...):");
+            if (num) selectChat(num);
+        }
+
+        socket.on('update_ui', () => { if(currentClient) selectChat(currentClient); });
+
+        // ==========================================
+        // LÓGICA DE CASOS Y POP-UP KANBAN
+        // ==========================================
+        function loadCases() {
+            socket.emit('get_cases', currentBot);
+        }
+
+        socket.on('cases_data', (cases) => {
+            currentCasesList = cases;
+            const colRevisar = document.getElementById('col-revisar');
+            const colAceptados = document.getElementById('col-aceptados');
+            const colUrgentes = document.getElementById('col-urgentes');
+            
+            colRevisar.innerHTML = ''; colAceptados.innerHTML = ''; colUrgentes.innerHTML = '';
+
+            cases.forEach(c => {
+                const card = `
+                    <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200 relative group cursor-default">
+                        ${c.is_urgent ? '<span class="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-full animate-pulse shadow">URGENTE</span>' : ''}
+                        <div class="font-bold text-gray-800 text-sm mb-1">${c.client_phone}</div>
+                        <div class="text-xs text-gray-400 mb-3">${new Date(c.created_at).toLocaleDateString()}</div>
+                        <p class="text-sm text-gray-600 bg-gray-50 p-2 rounded border border-gray-100 mb-3 line-clamp-2">
+                            ${c.summary || 'Sin resumen de IA...'}
+                        </p>
+                        <div class="flex gap-2 mt-2">
+                            <button onclick="openCaseModal(${c.id})" class="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs py-2 rounded font-bold transition"><i class="fa-solid fa-expand"></i> Ver</button>
+                            ${c.status === 'por_revisar' ? 
+                                `<button onclick="changeStatus(${c.id}, 'aceptado')" class="flex-1 bg-green-100 hover:bg-green-200 text-green-700 text-xs py-2 rounded font-bold transition">Aceptar</button>` : 
+                                `<button onclick="changeStatus(${c.id}, 'por_revisar')" class="flex-1 bg-yellow-100 hover:bg-yellow-200 text-yellow-700 text-xs py-2 rounded font-bold transition">Revertir</button>`
+                            }
+                        </div>
+                    </div>
+                `;
+
+                if (c.is_urgent) colUrgentes.innerHTML += card;
+                if (c.status === 'por_revisar' && !c.is_urgent) colRevisar.innerHTML += card;
+                if (c.status === 'aceptado') colAceptados.innerHTML += card;
+            });
+        });
+
+        function changeStatus(caseId, status) {
+            socket.emit('update_case_status', { caseId, status, botId: currentBot });
+        }
+
+        function openCaseModal(caseId) {
+            const caso = currentCasesList.find(c => c.id === caseId);
+            if (!caso) return;
+            
+            activeCaseId = caseId;
+            document.getElementById('modal-phone').innerText = "Cliente: " + caso.client_phone;
+            document.getElementById('modal-summary').innerText = caso.summary || "No hay resumen de la IA.";
+            document.getElementById('modal-notes').value = caso.notes || "";
+            
+            document.getElementById('btn-modal-chat').onclick = () => {
+                closeCaseModal();
+                selectChat(caso.client_phone);
+                switchView('whatsapp');
+            };
+
+            document.getElementById('case-modal').classList.remove('hidden');
+        }
+
+        function closeCaseModal() {
+            document.getElementById('case-modal').classList.add('hidden');
+            activeCaseId = null;
+        }
+
+        function saveCaseNotes() {
+            if (!activeCaseId) return;
+            const notes = document.getElementById('modal-notes').value;
+            socket.emit('save_case_notes', { caseId: activeCaseId, notes, botId: currentBot });
+            
+            const statusLabel = document.getElementById('save-status');
+            statusLabel.classList.remove('hidden');
+            statusLabel.classList.add('flex');
+            setTimeout(() => { statusLabel.classList.add('hidden'); statusLabel.classList.remove('flex'); }, 2000);
+        }
+    </script>
+</body>
+</html>
