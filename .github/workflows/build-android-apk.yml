@@ -1,0 +1,80 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+    
+    - name: Setup Java
+      uses: actions/setup-java@v3
+      with:
+        java-version: '11'
+        distribution: 'adopt'
+    
+    - name: Install frontend dependencies
+      run: |
+        cd frontend
+        npm ci
+    
+    - name: Build React app
+      run: |
+        cd frontend
+        npm run build
+    
+    - name: Install Capacitor
+      run: |
+        cd frontend
+        npm install @capacitor/core @capacitor/cli @capacitor/android
+    
+    - name: Initialize Capacitor
+      run: |
+        cd frontend
+        npx cap init "WP Bot CRM" "com.investigalo.wpbot" --web-dir=build
+    
+    - name: Add Android platform
+      run: |
+        cd frontend
+        npx cap add android
+    
+    - name: Sync Capacitor
+      run: |
+        cd frontend
+        npx cap sync
+    
+    - name: Build Android APK
+      run: |
+        cd frontend/android
+        chmod +x ./gradlew
+        ./gradlew assembleDebug
+    
+    - name: Upload APK
+      uses: actions/upload-artifact@v3
+      with:
+        name: app-debug.apk
+        path: frontend/android/app/build/outputs/apk/debug/app-debug.apk
+    
+    - name: Create Release
+      if: success()
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: apk-${{ github.run_id }}
+        release_name: APK Build ${{ github.run_id }}
+        body: |
+          Android APK automatically built
+          Download: app-debug.apk
+        draft: false
+        prerelease: true

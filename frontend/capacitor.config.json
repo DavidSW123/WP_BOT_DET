@@ -1,0 +1,14 @@
+{
+  "appId": "com.investigalo.wpbot",
+  "appName": "WP Bot CRM",
+  "webDir": "build",
+  "bundledWebRuntime": false,
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0
+    }
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}
